@@ -33,4 +33,5 @@ RUN go build -o /tmp/promoter ./cmd/run
 FROM gcr.io/distroless/base:latest
 COPY --from=golang /tmp/promoter /
 EXPOSE 80
+ENV LD_LIBRARY_PATH=/usr/local/lib/
 ENTRYPOINT [ "/promoter" ]

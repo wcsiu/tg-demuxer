@@ -1,26 +1,20 @@
 package main
 
-// #cgo LDFLAGS: -L/usr/local/lib/ -ltdjson
-// #include <td/telegram/td_json_client.h>
-import "C"
 import (
 	"log"
-	"unsafe"
+	"promoter/pkg/tg"
+	"promoter/pkg/tg/auth"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
-func td_send(client unsafe.Pointer, query *C.char) {
-	C.td_json_client_send(client, query)
-}
-
-func td_receive(client unsafe.Pointer) string {
-	return C.GoString(C.td_json_client_receive(client, 1.0))
-}
-
 func main() {
-	var client unsafe.Pointer
-	client = C.td_json_client_create()
+	var client = tg.CreateClient()
+	defer tg.DestoryClient(client)
 
-	query := C.CString(`{"@type": "getAuthorizationState"}`)
-	td_send(client, query)
-	log.Println(td_receive(client))
+	var res, err = auth.GetAuthorizationState(client)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(spew.Sdump(res))
 }
