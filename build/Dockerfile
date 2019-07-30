@@ -1,24 +1,11 @@
-FROM amd64/ubuntu:18.04 AS base
-
-WORKDIR /build
-
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y git cmake build-essential gperf libssl-dev zlib1g-dev
-
-RUN git clone https://github.com/tdlib/td.git && \
-    ls && \
-    cd td && \
-    mkdir build && \
-    cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release .. && \
-    cmake --build . && \
-    make install
-
+FROM wcsiu/tdlib:1.4.0 AS base
 FROM golang:1.12.7 AS golang
 
 COPY --from=base /usr/local/include/td /usr/local/include/td
 COPY --from=base /usr/local/lib/libtd* /usr/local/lib/
+COPY --from=base /usr/lib/x86_64-linux-gnu/libssl.so.1.1 /usr/lib/x86_64-linux-gnu/libssl.so
+COPY --from=base /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1 /usr/lib/x86_64-linux-gnu/libcrypto.so
+COPY --from=base /lib/x86_64-linux-gnu/libz.so.1 /lib/x86_64-linux-gnu/libz.so
 
 WORKDIR /promoter
 
@@ -26,12 +13,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/usr_local_lib.conf && ldconfig
+RUN go build -o /tip ./cmd/run
 
-RUN go build -o /tmp/promoter ./cmd/run
-
-FROM gcr.io/distroless/base:latest
-COPY --from=golang /tmp/promoter /
 EXPOSE 80
-ENV LD_LIBRARY_PATH=/usr/local/lib/
-ENTRYPOINT [ "/promoter" ]
+ENV LD_LIBRARY_PATH="/usr/local/lib/"
+ENTRYPOINT [ "/tip" ]

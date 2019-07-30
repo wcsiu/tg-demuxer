@@ -1,6 +1,9 @@
 package tg
 
-// #cgo LDFLAGS: -L/usr/local/lib/ -ltdjson
+// #cgo linux CFLAGS: -I/usr/local/include
+// #cgo linux LDFLAGS: -L/usr/local/lib -ltdjson_static -ltdjson_private -ltdclient -ltdcore -ltdactor -ltddb -ltdsqlite -ltdnet -ltdutils -ldl -lm
+// #cgo linux LDFLAGS: -L/usr/lib/x86_64-linux-gnu -lssl -lcrypto -lstdc++
+// #cgo linux LDFLAGS: -L/lib/x86_64-linux-gnu -lz
 // #include <td/telegram/td_json_client.h>
 // #include <stdlib.h>
 import "C"
