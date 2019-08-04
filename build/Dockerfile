@@ -13,8 +13,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 
-RUN go build -o /tip ./cmd/run
+RUN go build -o /tmp/promoter ./cmd/run
+RUN ldd /tmp/promoter
 
+# FROM gcr.io/distroless/base:latest
+# COPY --from=golang /tmp/promoter /
 EXPOSE 80
 ENV LD_LIBRARY_PATH="/usr/local/lib/"
-ENTRYPOINT [ "/tip" ]
+ENTRYPOINT [ "/tmp/promoter" ]
