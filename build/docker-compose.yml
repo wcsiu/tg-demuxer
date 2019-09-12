@@ -1,0 +1,28 @@
+version: '3.4'
+
+services:
+  tg-demuxer:
+    build:
+      context: ..
+      dockerfile: ./build/Dockerfile
+      network: host
+    image: telegram/demuxer
+    container_name: tg-demuxer
+    hostname: tg-demuxer
+    volumes:
+      - "..:/demuxer"
+      - "../configs:/configs"
+    expose:
+      - "80"
+    working_dir: /demuxer
+    stdin_open: true
+    tty: true
+  demuxer-postgres:
+    image: postgres:12.0
+    container_name: demuxer-postgres
+    environment:
+      - POSTGRES_DB=demuxer-dev
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - 5432:5432
