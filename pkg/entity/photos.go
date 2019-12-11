@@ -1,7 +1,7 @@
 package entity
 
-//Photos photos schema in db.
-type Photos struct {
+//Photo photos schema in db.
+type Photo struct {
 	ID                     int64  `db:"id"`
 	ImageHash              []byte `db:"image_hash"`
 	Caption                string `db:"caption"`

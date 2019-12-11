@@ -20,6 +20,7 @@ type Config struct {
 type TG struct {
 	APIID   string `yaml:"apiid"`
 	APIHash string `yaml:"apihash"`
+	Backup  string `yaml:"backup"`
 }
 
 // DB database config stuct.

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -109,7 +113,9 @@ func main() {
 	fmt.Printf("got %d chats\n", len(allChats))
 
 	for _, chat := range allChats {
-		retrieveAllPreviousPhotosFromChat(client, chat.ID)
+		if err := retrieveAllPreviousPhotosFromChat(client, chat.ID); err != nil {
+			log.Println("Error fail to retrieve all previous photos, error: ", err)
+		}
 	}
 
 	for {
@@ -119,6 +125,10 @@ func main() {
 
 // see https://stackoverflow.com/questions/37782348/how-to-use-getchats-in-tdlib
 func updateChatList(client *tdlib.Client) error {
+	// need to call getChats to retrieve chats first into tdlib first.
+	if _, getChatsErr := client.GetChats(tdlib.JSONInt64(int64(math.MaxInt64)), 0, 1000); getChatsErr != nil {
+		return getChatsErr
+	}
 	allChats = nil
 	for i := range config.C.ChatList {
 		var chat, getChatErr = client.GetChat(config.C.ChatList[i])
@@ -147,7 +157,8 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 			if downloadErr != nil {
 				return downloadErr
 			}
-			if err := postgres.InsertTGPhoto(&entity.Photos{
+			if err := postgres.InsertTGPhoto(&entity.Photo{
+				Caption:                p.Caption.Text,
 				ChatID:                 chatID,
 				MessageID:              v.ID,
 				PhotoID:                int64(p.Photo.ID),
@@ -182,7 +193,7 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 				if downloadErr != nil {
 					return downloadErr
 				}
-				if err := postgres.InsertTGPhoto(&entity.Photos{
+				if err := postgres.InsertTGPhoto(&entity.Photo{
 					ChatID:                 chatID,
 					MessageID:              v.ID,
 					PhotoID:                int64(p.Photo.ID),
@@ -228,13 +239,35 @@ func addUpdateFileMessageFitler(client *tdlib.Client) {
 
 	var receiver = client.AddEventReceiver(&tdlib.UpdateFile{}, eventFilter, 10)
 	for newMsg := range receiver.Chan {
-		fmt.Println(newMsg)
 		var updateFileMsg = (newMsg).(*tdlib.UpdateFile)
 
-		// TODO: compute image hash
-		// TODO: rename and move file to a more renaming location(S3?)
-		if updateErr := postgres.UpdateTGPhoto(updateFileMsg.File); updateErr != nil {
-			log.Println("Error fail to update db for downloaded photo, err: ", updateErr)
+		var p, getPErr = postgres.GetTGPhotoByFileID(updateFileMsg.File.ID)
+		if getPErr != nil {
+			if getPErr != sql.ErrNoRows {
+				log.Println("Error fail to get photo from db, err: ", getPErr)
+			}
+		} else {
+			// TODO: compute image hash
+			if updateErr := postgres.UpdateTGPhoto(updateFileMsg.File); updateErr != nil {
+				log.Println("Error fail to update db for downloaded photo, file ID: ", updateFileMsg.File.ID, ", err: ", updateErr)
+				continue
+			}
+
+			// rename and move file to a more renaming location(S3?)
+			var publishTime = time.Unix(int64(p.PublishedAt), 0).UTC()
+			var dest = filepath.Join(config.C.TG.Backup, publishTime.Format("2006-01-02"), strconv.FormatInt(p.ID, 10)+filepath.Ext(updateFileMsg.File.Local.Path))
+			if mkdirErr := os.MkdirAll(filepath.Dir(dest), os.ModePerm); mkdirErr != nil {
+				log.Println("fail to make dir for backup, file ID: ", updateFileMsg.File.ID, ", error: ", mkdirErr)
+				continue
+			}
+			if backupErr := os.Rename(updateFileMsg.File.Local.Path, dest); backupErr != nil {
+				log.Println("Error fail to move photo to backup, err: ", backupErr)
+			}
+			log.Printf("moved photo with id %d to backup folder\n", p.ID)
 		}
 	}
+}
+
+func moveToBackup(path string) error {
+	return os.Rename(path, config.C.TG.Backup+filepath.Base(path))
 }

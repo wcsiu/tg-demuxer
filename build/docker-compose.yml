@@ -11,6 +11,7 @@ services:
     hostname: tg-demuxer
     volumes:
       - "..:/demuxer"
+      - "../dev/backup:/backup"
       - "../configs:/configs"
     expose:
       - "80"
