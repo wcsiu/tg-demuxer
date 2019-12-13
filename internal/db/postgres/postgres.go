@@ -48,6 +48,25 @@ func Connect() {
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_image_hash ON photos (image_hash);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_message_id ON photos (chat_id, message_id);
 	CREATE INDEX IF NOT EXISTS idx_published_at ON photos (published_at);
+	CREATE TABLE IF NOT EXISTS videos (
+		id SERIAL NOT NULL PRIMARY KEY,
+		caption TEXT NOT NULL,
+		chat_id BIGINT NOT NULL,
+		message_id BIGINT NOT NULL,
+		media_album_id BIGINT NOT NULL,
+		file_id BIGINT NOT NULL,
+		mime_type TEXT NOT NULL,
+		sender_user_id BIGINT NOT NULL,
+		is_downloading_active BOOLEAN NOT NULL,
+		is_downloading_completed BOOLEAN NOT NULL,
+		is_uploading_active BOOLEAN NOT NULL,
+		is_uploading_completed BOOLEAN NOT NULL,
+		file_path TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		published_at INTEGER NOT NULL
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_message_id ON videos (chat_id, message_id);
+	CREATE INDEX IF NOT EXISTS idx_published_at ON videos (published_at);
 	`
 	db.MustExec(schema)
 }
@@ -69,7 +88,7 @@ func InsertTGPhoto(p *entity.Photo) error {
 	return nil
 }
 
-//UpdateTGPhoto update TG photos
+//UpdateTGPhoto update TG photo
 func UpdateTGPhoto(f *tdlib.File) error {
 	var photo = entity.Photo{FileID: f.ID, IsDownloadingActive: f.Local.IsDownloadingActive, IsDownloadingCompleted: f.Local.IsDownloadingCompleted, IsUploadingActive: f.Remote.IsUploadingActive, IsUploadingCompleted: f.Remote.IsUploadingCompleted, FilePath: f.Local.Path}
 	if _, err := db.NamedExec("UPDATE photos SET is_downloading_active=:is_downloading_active,is_downloading_completed=:is_downloading_completed,is_uploading_active=:is_uploading_active,is_uploading_completed=:is_uploading_completed,file_path=:file_path WHERE file_id=:file_id", &photo); err != nil {
@@ -94,4 +113,34 @@ func GetTGPhotoByFileID(fileID int32) (*entity.Photo, error) {
 		return nil, err
 	}
 	return &ret, nil
+}
+
+//InsertTGVideo insert TG video to db.
+func InsertTGVideo(v *entity.Video) error {
+	if _, err := db.NamedExec(
+		`INSERT INTO
+			videos(caption,chat_id,message_id,media_album_id,file_id,mime_type,sender_user_id,is_downloading_active,is_downloading_completed,is_uploading_active,is_uploading_completed,file_path,created_at,published_at)
+		VALUES
+			(:caption,:chat_id,:message_id,:media_album_id,:file_id,:mime_type,:sender_user_id,:is_downloading_active,:is_downloading_completed,:is_uploading_active,:is_uploading_completed,:file_path,:created_at,:published_at)`, &v); err != nil {
+		return err
+	}
+	return nil
+}
+
+//GetTGVideoByFileID get file ID by file id
+func GetTGVideoByFileID(fileID int32) (*entity.Video, error) {
+	var ret entity.Video
+	if err := db.Get(&ret, "SELECT * FROM videos WHERE file_id=$1", fileID); err != nil {
+		return nil, err
+	}
+	return &ret, nil
+}
+
+//UpdateTGVideo update TG video
+func UpdateTGVideo(f *tdlib.File) error {
+	var video = entity.Video{FileID: f.ID, IsDownloadingActive: f.Local.IsDownloadingActive, IsDownloadingCompleted: f.Local.IsDownloadingCompleted, IsUploadingActive: f.Remote.IsUploadingActive, IsUploadingCompleted: f.Remote.IsUploadingCompleted, FilePath: f.Local.Path}
+	if _, err := db.NamedExec("UPDATE videos SET is_downloading_active=:is_downloading_active,is_downloading_completed=:is_downloading_completed,is_uploading_active=:is_uploading_active,is_uploading_completed=:is_uploading_completed,file_path=:file_path WHERE file_id=:file_id", &video); err != nil {
+		return err
+	}
+	return nil
 }

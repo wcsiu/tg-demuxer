@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/wcsiu/go-tdlib"
 	"github.com/wcsiu/tg-demuxer/internal/config"
 	"github.com/wcsiu/tg-demuxer/internal/db/postgres"
@@ -142,51 +143,22 @@ func updateChatList(client *tdlib.Client) error {
 }
 
 func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error {
-	var msgs, getMsgsErr = client.GetChatHistory(chatID, 0, 0, 1, false)
-	if getMsgsErr != nil {
-		log.Println("ERROR: fail to get messages from chat: ", chatID, ", error: ", getMsgsErr)
-	}
-	for _, v := range msgs.Messages {
-		if v.Content.GetMessageContentEnum() == tdlib.MessagePhotoType {
-			var p, photoCastOK = v.Content.(*tdlib.MessagePhoto)
-			if !photoCastOK {
-				log.Println("ERROR: fail to type cast to MessagePhoto")
-			}
-			var largest = getLargestResolution(p.Photo.Sizes)
-			var f, downloadErr = client.DownloadFile(largest.Photo.ID, 32)
-			if downloadErr != nil {
-				return downloadErr
-			}
-			if err := postgres.InsertTGPhoto(&entity.Photo{
-				Caption:                p.Caption.Text,
-				ChatID:                 chatID,
-				MessageID:              v.ID,
-				PhotoID:                int64(p.Photo.ID),
-				MediaAlbumID:           int64(v.MediaAlbumID),
-				FileID:                 largest.Photo.ID,
-				SendUserID:             v.SenderUserID,
-				IsDownloadingActive:    f.Local.IsDownloadingActive,
-				IsDownloadingCompleted: f.Local.IsDownloadingActive,
-				IsUploadingActive:      f.Remote.IsUploadingActive,
-				IsUploadingCompleted:   f.Remote.IsUploadingCompleted,
-				CreateAt:               time.Now().Unix(),
-				PublishedAt:            v.Date,
-			}); err != nil {
-				return err
-			}
+	var msgs *tdlib.Messages
+	var lastMessageID = int64(0)
 
-		}
-	}
-	for msgs.TotalCount > 0 {
-		msgs, getMsgsErr = client.GetChatHistory(chatID, msgs.Messages[0].ID, 0, 1, false)
+	for lastMessageID == 0 || msgs.TotalCount > 0 {
+		var getMsgsErr error
+		msgs, getMsgsErr = client.GetChatHistory(chatID, lastMessageID, 0, 10, false)
 		if getMsgsErr != nil {
 			log.Println("ERROR: fail to get messages from chat: ", chatID, ", error: ", getMsgsErr)
 		}
 		for _, v := range msgs.Messages {
-			if v.Content.GetMessageContentEnum() == tdlib.MessagePhotoType {
+			switch v.Content.GetMessageContentEnum() {
+			case tdlib.MessagePhotoType:
 				var p, photoCastOK = v.Content.(*tdlib.MessagePhoto)
 				if !photoCastOK {
 					log.Println("ERROR: fail to type cast to MessagePhoto")
+					continue
 				}
 				var largest = getLargestResolution(p.Photo.Sizes)
 				var f, downloadErr = client.DownloadFile(largest.Photo.ID, 32)
@@ -194,6 +166,7 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 					return downloadErr
 				}
 				if err := postgres.InsertTGPhoto(&entity.Photo{
+					Caption:                p.Caption.Text,
 					ChatID:                 chatID,
 					MessageID:              v.ID,
 					PhotoID:                int64(p.Photo.ID),
@@ -204,13 +177,41 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 					IsDownloadingCompleted: f.Local.IsDownloadingActive,
 					IsUploadingActive:      f.Remote.IsUploadingActive,
 					IsUploadingCompleted:   f.Remote.IsUploadingCompleted,
-					CreateAt:               time.Now().Unix(),
+					CreatedAt:              time.Now().Unix(),
+					PublishedAt:            v.Date,
+				}); err != nil {
+					return err
+				}
+			case tdlib.MessageVideoType:
+				var vi, videoCastOK = v.Content.(*tdlib.MessageVideo)
+				if !videoCastOK {
+					log.Println("ERROR: fail to type cast to MessageVideo")
+					continue
+				}
+				var f, downloadErr = client.DownloadFile(vi.Video.Video.ID, 32)
+				if downloadErr != nil {
+					return downloadErr
+				}
+				if err := postgres.InsertTGVideo(&entity.Video{
+					Caption:                vi.Caption.Text,
+					ChatID:                 chatID,
+					MessageID:              v.ID,
+					MediaAlbumID:           int64(v.MediaAlbumID),
+					FileID:                 vi.Video.Video.ID,
+					SenderUserID:           v.SenderUserID,
+					IsDownloadingActive:    f.Local.IsDownloadingActive,
+					IsDownloadingCompleted: f.Local.IsDownloadingCompleted,
+					IsUploadingActive:      f.Remote.IsUploadingActive,
+					IsUploadingCompleted:   f.Remote.IsUploadingCompleted,
+					CreatedAt:              time.Now().Unix(),
 					PublishedAt:            v.Date,
 				}); err != nil {
 					return err
 				}
 			}
+			lastMessageID = v.ID
 		}
+		time.Sleep(time.Second)
 	}
 	return nil
 }
@@ -241,33 +242,79 @@ func addUpdateFileMessageFitler(client *tdlib.Client) {
 	for newMsg := range receiver.Chan {
 		var updateFileMsg = (newMsg).(*tdlib.UpdateFile)
 
+		// see if file_id belongs to photos.
 		var p, getPErr = postgres.GetTGPhotoByFileID(updateFileMsg.File.ID)
 		if getPErr != nil {
 			if getPErr != sql.ErrNoRows {
 				log.Println("Error fail to get photo from db, err: ", getPErr)
+				continue
 			}
 		} else {
-			// TODO: compute image hash
-			if updateErr := postgres.UpdateTGPhoto(updateFileMsg.File); updateErr != nil {
-				log.Println("Error fail to update db for downloaded photo, file ID: ", updateFileMsg.File.ID, ", err: ", updateErr)
+			if updatePhotoErr := updateTGPhotoAndBackup(updateFileMsg, p); updatePhotoErr != nil {
+				log.Printf("fail to update db photo record and backup, error: %+v\n", updatePhotoErr)
 				continue
-			}
-
-			// rename and move file to a more renaming location(S3?)
-			var publishTime = time.Unix(int64(p.PublishedAt), 0).UTC()
-			var dest = filepath.Join(config.C.TG.Backup, publishTime.Format("2006-01-02"), strconv.FormatInt(p.ID, 10)+filepath.Ext(updateFileMsg.File.Local.Path))
-			if mkdirErr := os.MkdirAll(filepath.Dir(dest), os.ModePerm); mkdirErr != nil {
-				log.Println("fail to make dir for backup, file ID: ", updateFileMsg.File.ID, ", error: ", mkdirErr)
-				continue
-			}
-			if backupErr := os.Rename(updateFileMsg.File.Local.Path, dest); backupErr != nil {
-				log.Println("Error fail to move photo to backup, err: ", backupErr)
 			}
 			log.Printf("moved photo with id %d to backup folder\n", p.ID)
+			continue
+		}
+
+		// see if file_id belongs to videos.
+		var v, getVErr = postgres.GetTGVideoByFileID(updateFileMsg.File.ID)
+		if getVErr != nil {
+			if getVErr != sql.ErrNoRows {
+				log.Println("Error fail to get video from db, err: ", getVErr)
+				continue
+			}
+		} else {
+			if updatePhotoErr := updateTGVideoAndBackup(updateFileMsg, v); updatePhotoErr != nil {
+				log.Printf("fail to update db video record and backup, error: %+v\n", updatePhotoErr)
+				continue
+			}
+			log.Printf("moved video with id %d to backup folder\n", v.ID)
 		}
 	}
 }
 
-func moveToBackup(path string) error {
-	return os.Rename(path, config.C.TG.Backup+filepath.Base(path))
+func updateTGPhotoAndBackup(updateFileMsg *tdlib.UpdateFile, p *entity.Photo) error {
+	if updateErr := postgres.UpdateTGPhoto(updateFileMsg.File); updateErr != nil {
+		return errors.Wrap(updateErr, fmt.Sprintf("fail to update db for downloaded photo, file ID: %d", updateFileMsg.File.ID))
+	}
+
+	// rename and move file to a more renaming location(S3?)
+	var publishTime = time.Unix(int64(p.PublishedAt), 0).UTC()
+	var dest string
+	if p.MediaAlbumID == 0 {
+		dest = filepath.Join(config.C.TG.Backup, publishTime.Format("2006-01-02"), "photos", "photos_id_"+strconv.FormatInt(p.ID, 10)+filepath.Ext(updateFileMsg.File.Local.Path))
+	} else {
+		dest = filepath.Join(config.C.TG.Backup, publishTime.Format("2006-01-02"), "albums", "album_id_"+strconv.FormatInt(p.MediaAlbumID, 10), "photos_id_"+strconv.FormatInt(p.ID, 10)+filepath.Ext(updateFileMsg.File.Local.Path))
+	}
+	if mkdirErr := os.MkdirAll(filepath.Dir(dest), os.ModePerm); mkdirErr != nil {
+		return errors.Wrap(mkdirErr, fmt.Sprintf("fail to make dir for backup, file ID: %d", updateFileMsg.File.ID))
+	}
+	if backupErr := os.Rename(updateFileMsg.File.Local.Path, dest); backupErr != nil {
+		return errors.Wrap(backupErr, fmt.Sprintf("fail to move photo to backup, path: %s", updateFileMsg.File.Local.Path))
+	}
+	return nil
+}
+
+func updateTGVideoAndBackup(updateFileMsg *tdlib.UpdateFile, v *entity.Video) error {
+	if updateErr := postgres.UpdateTGVideo(updateFileMsg.File); updateErr != nil {
+		return errors.Wrap(updateErr, fmt.Sprintf("fail to update db for downloaded video, file ID: %d", updateFileMsg.File.ID))
+	}
+
+	// rename and move file to a more renaming location(S3?)
+	var publishTime = time.Unix(int64(v.PublishedAt), 0).UTC()
+	var dest string
+	if v.MediaAlbumID == 0 {
+		dest = filepath.Join(config.C.TG.Backup, publishTime.Format("2006-01-02"), "videos", "videos_id_"+strconv.FormatInt(v.ID, 10)+filepath.Ext(updateFileMsg.File.Local.Path))
+	} else {
+		dest = filepath.Join(config.C.TG.Backup, publishTime.Format("2006-01-02"), "albums", "album_id_"+strconv.FormatInt(v.MediaAlbumID, 10), "videos_id_"+strconv.FormatInt(v.ID, 10)+filepath.Ext(updateFileMsg.File.Local.Path))
+	}
+	if mkdirErr := os.MkdirAll(filepath.Dir(dest), os.ModePerm); mkdirErr != nil {
+		return errors.Wrap(mkdirErr, fmt.Sprintf("fail to make dir for backup, file ID: %d", updateFileMsg.File.ID))
+	}
+	if backupErr := os.Rename(updateFileMsg.File.Local.Path, dest); backupErr != nil {
+		return errors.Wrap(backupErr, fmt.Sprintf("fail to move photo to backup, path: %s", updateFileMsg.File.Local.Path))
+	}
+	return nil
 }
