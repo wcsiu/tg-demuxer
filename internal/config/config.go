@@ -13,23 +13,32 @@ var C Config
 type Config struct {
 	TG       TG      `yaml:"tg"`
 	DB       DB      `yaml:"db"`
-	ChatList []int64 `yaml:"chatlist"`
+	TWTR     TWTR    `yaml:"twtr"`
+	ChatList []int64 `yaml:"chat_list"`
 }
 
 // TG telegram config struct.
 type TG struct {
-	APIID   string `yaml:"apiid"`
-	APIHash string `yaml:"apihash"`
+	APIID   string `yaml:"api_id"`
+	APIHash string `yaml:"api_hash"`
 	Backup  string `yaml:"backup"`
 }
 
-// DB database config stuct.
+// DB database config struct.
 type DB struct {
 	Host     string `yaml:"host"`
 	Port     string `yaml:"port"`
 	Name     string `yaml:"name"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
+}
+
+// TWTR twitter api config struct.
+type TWTR struct {
+	ConsumerKey       string `yaml:"consumer_key"`
+	ConsumerSecret    string `yaml:"consumer_secret"`
+	AccessToken       string `yaml:"access_token"`
+	AccessTokenSecret string `yaml:"access_token_secret"`
 }
 
 // Load load config from path.
