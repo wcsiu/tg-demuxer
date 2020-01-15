@@ -17,5 +17,6 @@ type Photo struct {
 	IsUploadingCompleted   bool   `db:"is_uploading_completed"`
 	FilePath               string `db:"file_path"`
 	CreatedAt              int64  `db:"created_at"`
+	ModifiedAt             int64  `db:"modified_at"`
 	PublishedAt            int32  `db:"published_at"`
 }

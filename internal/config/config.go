@@ -14,6 +14,7 @@ type Config struct {
 	TG       TG      `yaml:"tg"`
 	DB       DB      `yaml:"db"`
 	TWTR     TWTR    `yaml:"twtr"`
+	S3       S3      `yaml:"s3"`
 	ChatList []int64 `yaml:"chat_list"`
 }
 
@@ -39,6 +40,14 @@ type TWTR struct {
 	ConsumerSecret    string `yaml:"consumer_secret"`
 	AccessToken       string `yaml:"access_token"`
 	AccessTokenSecret string `yaml:"access_token_secret"`
+}
+
+// S3 s3 config
+type S3 struct {
+	BucketName      string `yaml:"bucket_name"`
+	Region          string `yaml:"region"`
+	AccessKeyID     string `yaml:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key"`
 }
 
 // Load load config from path.

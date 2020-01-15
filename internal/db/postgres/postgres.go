@@ -3,6 +3,7 @@ package postgres
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -24,80 +25,46 @@ func Connect() {
 	if err := db.Ping(); err != nil {
 		log.Fatal((err))
 	}
-
-	// migration
-	var schema = `
-	CREATE TABLE IF NOT EXISTS photos (
-		id SERIAL NOT NULL PRIMARY KEY,
-		image_hash BYTEA,
-		caption TEXT NOT NULL,
-		chat_id BIGINT NOT NULL,
-		message_id BIGINT NOT NULL,
-		photo_id BIGINT NOT NULL,
-		media_album_id BIGINT NOT NULL,
-		file_id BIGINT NOT NULL,
-		sender_user_id BIGINT NOT NULL,
-		is_downloading_active BOOLEAN NOT NULL,
-		is_downloading_completed BOOLEAN NOT NULL,
-		is_uploading_active BOOLEAN NOT NULL,
-		is_uploading_completed BOOLEAN NOT NULL,
-		file_path TEXT NOT NULL,
-		created_at INTEGER NOT NULL,
-		published_at INTEGER NOT NULL
-	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_image_hash ON photos (image_hash);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_message_id ON photos (chat_id, message_id);
-	CREATE INDEX IF NOT EXISTS idx_published_at ON photos (published_at);
-	CREATE TABLE IF NOT EXISTS videos (
-		id SERIAL NOT NULL PRIMARY KEY,
-		caption TEXT NOT NULL,
-		chat_id BIGINT NOT NULL,
-		message_id BIGINT NOT NULL,
-		media_album_id BIGINT NOT NULL,
-		file_id BIGINT NOT NULL,
-		mime_type TEXT NOT NULL,
-		sender_user_id BIGINT NOT NULL,
-		is_downloading_active BOOLEAN NOT NULL,
-		is_downloading_completed BOOLEAN NOT NULL,
-		is_uploading_active BOOLEAN NOT NULL,
-		is_uploading_completed BOOLEAN NOT NULL,
-		file_path TEXT NOT NULL,
-		created_at INTEGER NOT NULL,
-		published_at INTEGER NOT NULL
-	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_message_id ON videos (chat_id, message_id);
-	CREATE INDEX IF NOT EXISTS idx_published_at ON videos (published_at);
-	`
-	db.MustExec(schema)
 }
 
-//Close close db connection
+// Close close db connection
 func Close() {
 	db.Close()
 }
 
-//InsertTGPhoto insert TG photo to db
+// InsertTGPhoto insert TG photo to db
 func InsertTGPhoto(p *entity.Photo) error {
 	if _, err := db.NamedExec(
 		`INSERT INTO
-			photos(caption,chat_id,message_id,photo_id,media_album_id,file_id,sender_user_id,is_downloading_active,is_downloading_completed,is_uploading_active,is_uploading_completed,file_path,created_at,published_at)
+			photos(caption,chat_id,message_id,photo_id,media_album_id,file_id,sender_user_id,is_downloading_active,is_downloading_completed,is_uploading_active,is_uploading_completed,file_path,created_at,modified_at,published_at)
 		VALUES
-			(:caption,:chat_id,:message_id,:photo_id,:media_album_id,:file_id,:sender_user_id,:is_downloading_active,:is_downloading_completed,:is_uploading_active,:is_uploading_completed,:file_path,:created_at,:published_at)`, &p); err != nil {
+			(:caption,:chat_id,:message_id,:photo_id,:media_album_id,:file_id,:sender_user_id,:is_downloading_active,:is_downloading_completed,:is_uploading_active,:is_uploading_completed,:file_path,:created_at,:modified_at,:published_at)`, &p); err != nil {
 		return err
 	}
 	return nil
 }
 
-//UpdateTGPhoto update TG photo
-func UpdateTGPhoto(f *tdlib.File) error {
-	var photo = entity.Photo{FileID: f.ID, IsDownloadingActive: f.Local.IsDownloadingActive, IsDownloadingCompleted: f.Local.IsDownloadingCompleted, IsUploadingActive: f.Remote.IsUploadingActive, IsUploadingCompleted: f.Remote.IsUploadingCompleted, FilePath: f.Local.Path}
-	if _, err := db.NamedExec("UPDATE photos SET is_downloading_active=:is_downloading_active,is_downloading_completed=:is_downloading_completed,is_uploading_active=:is_uploading_active,is_uploading_completed=:is_uploading_completed,file_path=:file_path WHERE file_id=:file_id", &photo); err != nil {
+// UpdateTGPhoto update TG photo
+func UpdateTGPhoto(f *tdlib.File, path string) error {
+	if _, err := db.Exec(`
+	UPDATE
+		photos
+	SET
+		is_downloading_active=$1,
+		is_downloading_completed=$2,
+		is_uploading_active=$3,
+		is_uploading_completed=$4,
+		file_path=$5,
+		modified_at=$6
+	WHERE
+		file_id=$7`,
+		f.Local.IsDownloadingActive, f.Local.IsDownloadingCompleted, f.Remote.IsUploadingActive, f.Remote.IsUploadingCompleted, path, time.Now().Unix(), f.ID); err != nil {
 		return err
 	}
 	return nil
 }
 
-//IfFileExists check if file exists in db
+// IfFileExists check if file exists in db
 func IfFileExists(f *tdlib.File) (bool, error) {
 	var ret bool
 	if err := db.Get(&ret, "SELECT EXISTS(SELECT 1 FROM photos WHERE file_id=$1)", f.ID); err != nil {
@@ -106,7 +73,7 @@ func IfFileExists(f *tdlib.File) (bool, error) {
 	return ret, nil
 }
 
-//GetTGPhotoByFileID get file ID by file id
+// GetTGPhotoByFileID get file ID by file id
 func GetTGPhotoByFileID(fileID int32) (*entity.Photo, error) {
 	var ret entity.Photo
 	if err := db.Get(&ret, "SELECT * FROM photos WHERE file_id=$1", fileID); err != nil {
@@ -115,19 +82,19 @@ func GetTGPhotoByFileID(fileID int32) (*entity.Photo, error) {
 	return &ret, nil
 }
 
-//InsertTGVideo insert TG video to db.
+// InsertTGVideo insert TG video to db.
 func InsertTGVideo(v *entity.Video) error {
 	if _, err := db.NamedExec(
 		`INSERT INTO
-			videos(caption,chat_id,message_id,media_album_id,file_id,mime_type,sender_user_id,is_downloading_active,is_downloading_completed,is_uploading_active,is_uploading_completed,file_path,created_at,published_at)
+			videos(caption,chat_id,message_id,media_album_id,file_id,mime_type,sender_user_id,is_downloading_active,is_downloading_completed,is_uploading_active,is_uploading_completed,file_path,created_at,modified_at,published_at)
 		VALUES
-			(:caption,:chat_id,:message_id,:media_album_id,:file_id,:mime_type,:sender_user_id,:is_downloading_active,:is_downloading_completed,:is_uploading_active,:is_uploading_completed,:file_path,:created_at,:published_at)`, &v); err != nil {
+			(:caption,:chat_id,:message_id,:media_album_id,:file_id,:mime_type,:sender_user_id,:is_downloading_active,:is_downloading_completed,:is_uploading_active,:is_uploading_completed,:file_path,:created_at,:modified_at,:published_at)`, &v); err != nil {
 		return err
 	}
 	return nil
 }
 
-//GetTGVideoByFileID get file ID by file id
+// GetTGVideoByFileID get file ID by file id
 func GetTGVideoByFileID(fileID int32) (*entity.Video, error) {
 	var ret entity.Video
 	if err := db.Get(&ret, "SELECT * FROM videos WHERE file_id=$1", fileID); err != nil {
@@ -136,11 +103,82 @@ func GetTGVideoByFileID(fileID int32) (*entity.Video, error) {
 	return &ret, nil
 }
 
-//UpdateTGVideo update TG video
-func UpdateTGVideo(f *tdlib.File) error {
-	var video = entity.Video{FileID: f.ID, IsDownloadingActive: f.Local.IsDownloadingActive, IsDownloadingCompleted: f.Local.IsDownloadingCompleted, IsUploadingActive: f.Remote.IsUploadingActive, IsUploadingCompleted: f.Remote.IsUploadingCompleted, FilePath: f.Local.Path}
-	if _, err := db.NamedExec("UPDATE videos SET is_downloading_active=:is_downloading_active,is_downloading_completed=:is_downloading_completed,is_uploading_active=:is_uploading_active,is_uploading_completed=:is_uploading_completed,file_path=:file_path WHERE file_id=:file_id", &video); err != nil {
+// UpdateTGVideo update TG video
+func UpdateTGVideo(f *tdlib.File, path string) error {
+	if _, err := db.Exec(`
+	UPDATE
+		videos
+	SET
+		is_downloading_active=$1,
+		is_downloading_completed=$2,
+		is_uploading_active=$3,
+		is_uploading_completed=$4,
+		file_path=$5,
+		modified_at=$6
+	WHERE
+		file_id=$7`,
+		f.Local.IsDownloadingActive, f.Local.IsDownloadingCompleted, f.Remote.IsUploadingActive, f.Remote.IsUploadingCompleted, path, time.Now().Unix(), f.ID); err != nil {
 		return err
 	}
 	return nil
+}
+
+// InsertChat insert new chat to db
+func InsertChat(c *entity.Chat) error {
+	if _, err := db.NamedExec(
+		`INSERT INTO
+			chats(title,chat_id,created_at,modified_at)
+		VALUES
+			(:title,:chat_id,:created_at,:modified_at)`, &c); err != nil {
+		return err
+	}
+	return nil
+}
+
+// InsertMessage insert new message to db
+func InsertMessage(m *entity.Message) error {
+	if _, err := db.NamedExec(
+		`INSERT INTO
+			messages(message_type,message_id,chat_id,media_album_id,uploaded,created_at,modified_at,published_at)
+		VALUES
+			(:message_type,:message_id,:chat_id,:media_album_id,:uploaded,:created_at,:modified_at,:published_at)`, &m); err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetMessageByMessageID get message by message id and chat id
+func GetMessageByMessageID(m *entity.Message, MessageID, ChatID int64) error {
+	if err := db.Get(m, "SELECT * FROM messages WHERE message_id=$1 AND chat_id=$2", MessageID, ChatID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateMessageUploadStatus update message upload status
+func UpdateMessageUploadStatus(m *entity.Message, uploaded bool) error {
+	if _, err := db.Exec(`
+	UPDATE
+		messages
+	SET
+		uploaded=$1,
+		modified_at=$2
+	WHERE
+		chat_id=$3
+		AND
+		message_id=$4
+		AND
+		modified_at=$5`, uploaded, time.Now().Unix(), m.ChatID, m.MessageID, m.ModifiedAt); err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetMaxMsgIDInChat get max message id in chat
+func GetMaxMsgIDInChat(chatID int64) (int64, error) {
+	var ret int64
+	if err := db.Get(&ret, "SELECT MAX(message_id) FROM messages WHERE chat_id=$1", chatID); err != nil {
+		return ret, err
+	}
+	return ret, nil
 }
