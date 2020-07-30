@@ -1,5 +1,5 @@
 FROM wcsiu/tdlib:1.5.0 AS base
-FROM golang:1.13 AS golang
+FROM golang:1.14 AS golang
 
 COPY --from=base /usr/local/include/td /usr/local/include/td
 COPY --from=base /usr/local/lib/libtd* /usr/local/lib/
