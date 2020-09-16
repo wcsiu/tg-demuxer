@@ -125,7 +125,7 @@ func main() {
 			if insertErr := postgres.InsertChat(&entity.Chat{Title: chat.Title, ChatID: chat.ID, CreatedAt: nowUnix, ModifiedAt: nowUnix}); insertErr != nil {
 				log.Printf("fail to insert chat info to db, error: %+v", insertErr)
 			}
-			if err := retrieveAllPreviousPhotosFromChat(client, chat.ID); err != nil {
+			if err := retrieveAllPreviousMediaFromChat(client, chat.ID); err != nil {
 				log.Println("Error fail to retrieve all previous photos, error: ", err)
 			}
 			var lastMessageID, lastMsgIDErr = postgres.GetMaxMsgIDInChat(chat.ID)
@@ -162,7 +162,7 @@ func updateChatList(client *tdlib.Client) error {
 	return nil
 }
 
-func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error {
+func retrieveAllPreviousMediaFromChat(client *tdlib.Client, chatID int64) error {
 	var msgs *tdlib.Messages
 	var lastMessageID = int64(0)
 
@@ -189,8 +189,14 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 					ModifiedAt:   nowUnix,
 					PublishedAt:  v.Date,
 				}); insertMsgErr != nil {
-					log.Printf("ERROR: fail to insert message into db, message id: %d, chat id: %d, error: %+v", v.ID, v.ChatID, insertMsgErr)
-					break
+					var m entity.Message
+					if err := postgres.GetMessageByMessageID(&m, v.ID, v.ChatID); err != nil {
+						log.Printf("ERROR: getting message by message id for InsertMessage, message id: %d, chat id:%d", v.ID, v.ChatID)
+						break
+					}
+					if m.Uploaded {
+						break
+					}
 				}
 				var p, photoCastOK = v.Content.(*tdlib.MessagePhoto)
 				if !photoCastOK {
@@ -218,6 +224,14 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 					ModifiedAt:             nowUnix,
 					PublishedAt:            v.Date,
 				}); err != nil {
+					var photo, getPhotoErr = postgres.GetTGPhotoByFileID(largest.Photo.ID)
+					if getPhotoErr != nil {
+						log.Printf("ERROR: getting photo by file id for InsertTGPhoto, file id: %d", largest.Photo.ID)
+						break
+					}
+					if photo.IsUploadingCompleted {
+						break
+					}
 					return err
 				}
 			case tdlib.MessageVideoType:
@@ -232,16 +246,23 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 					ModifiedAt:   nowUnix,
 					PublishedAt:  v.Date,
 				}); insertMsgErr != nil {
-					log.Printf("ERROR: fail to insert message into db, message id: %d, chat id: %d, error: %+v", v.ID, v.ChatID, insertMsgErr)
-					continue
+					var m entity.Message
+					if err := postgres.GetMessageByMessageID(&m, v.ID, v.ChatID); err != nil {
+						log.Printf("ERROR: getting message by message id for InsertMessage, message id: %d, chat id:%d", v.ID, v.ChatID)
+						break
+					}
+					if m.Uploaded {
+						break
+					}
 				}
 				var vi, videoCastOK = v.Content.(*tdlib.MessageVideo)
 				if !videoCastOK {
 					log.Println("ERROR: fail to type cast to MessageVideo")
-					continue
+					break
 				}
 				var f, downloadErr = client.DownloadFile(vi.Video.Video.ID, 32)
 				if downloadErr != nil {
+					log.Printf("ERROR: fail to download video from telegram, video ID: %d", vi.Video.Video.ID)
 					return downloadErr
 				}
 				if err := postgres.InsertTGVideo(&entity.Video{
@@ -259,6 +280,14 @@ func retrieveAllPreviousPhotosFromChat(client *tdlib.Client, chatID int64) error
 					ModifiedAt:             nowUnix,
 					PublishedAt:            v.Date,
 				}); err != nil {
+					var video, getVideoErr = postgres.GetTGVideoByFileID(vi.Video.Video.ID)
+					if getVideoErr != nil {
+						log.Printf("ERROR: getting photo by file id for InsertTGPhoto, file id: %d", vi.Video.Video.ID)
+						break
+					}
+					if video.IsUploadingCompleted {
+						break
+					}
 					return err
 				}
 			}
