@@ -13,6 +13,6 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/lib/pq v1.8.0
 	github.com/pkg/errors v0.9.1
-	github.com/wcsiu/go-tdlib v0.0.0-20200916015929-4cfd6b7bc761
+	github.com/wcsiu/go-tdlib v1.6.0
 	gopkg.in/yaml.v2 v2.3.0
 )
