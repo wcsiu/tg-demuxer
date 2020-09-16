@@ -1,4 +1,4 @@
-FROM wcsiu/tdlib:1.5.0 AS base
+FROM wcsiu/tdlib:1.6.0 AS base
 FROM golang:1.14 AS golang
 
 COPY --from=base /usr/local/include/td /usr/local/include/td
