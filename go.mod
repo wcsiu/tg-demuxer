@@ -1,8 +1,9 @@
 module github.com/wcsiu/tg-demuxer
 
-go 1.14
+go 1.15
 
 require (
+	github.com/Arman92/go-tdlib v0.0.0-20201227223502-25aa12c0e7f9
 	github.com/ChimeraCoder/anaconda v2.0.0+incompatible
 	github.com/ChimeraCoder/tokenbucket v0.0.0-20131201223612-c5a927568de7 // indirect
 	github.com/aws/aws-sdk-go v1.34.24
@@ -13,6 +14,5 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/lib/pq v1.8.0
 	github.com/pkg/errors v0.9.1
-	github.com/wcsiu/go-tdlib v1.6.0
 	gopkg.in/yaml.v2 v2.3.0
 )

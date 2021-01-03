@@ -1,4 +1,5 @@
-github.com/Arman92/go-tdlib v0.0.0-20190517084650-5bbe270b752e/go.mod h1:ZzkRfuaFj8etIYMj/ECtXtgfz72RE6U+dos27b3XIwk=
+github.com/Arman92/go-tdlib v0.0.0-20201227223502-25aa12c0e7f9 h1:CUJB73bE79qGp716wgT1WjteWIrVufqlpFskhy94NkE=
+github.com/Arman92/go-tdlib v0.0.0-20201227223502-25aa12c0e7f9/go.mod h1:ZzkRfuaFj8etIYMj/ECtXtgfz72RE6U+dos27b3XIwk=
 github.com/ChimeraCoder/anaconda v2.0.0+incompatible h1:F0eD7CHXieZ+VLboCD5UAqCeAzJZxcr90zSCcuJopJs=
 github.com/ChimeraCoder/anaconda v2.0.0+incompatible/go.mod h1:TCt3MijIq3Qqo9SBtuW/rrM4x7rDfWqYWHj8T7hLcLg=
 github.com/ChimeraCoder/tokenbucket v0.0.0-20131201223612-c5a927568de7 h1:r+EmXjfPosKO4wfiMLe1XQictsIlhErTufbWUsjOTZs=
@@ -36,10 +37,6 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.5.1 h1:nOGnQDM7FYENwehXlg/kFVnos3rEvtKTjRvOWSzb6H4=
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
-github.com/wcsiu/go-tdlib v0.0.0-20200916015929-4cfd6b7bc761 h1:D7KuKFFgOLAc8SKqPt6YB3zym2r1GsvSxXZwckjIyzI=
-github.com/wcsiu/go-tdlib v0.0.0-20200916015929-4cfd6b7bc761/go.mod h1:ZhwAQ4lH2Y3ONlzF/Mcai3lLm6VProap2toFoGKNC6k=
-github.com/wcsiu/go-tdlib v1.6.0 h1:dw4Y+H48feA63KVgryLAnKNqbepIlJ/WJa9hmAsVYOw=
-github.com/wcsiu/go-tdlib v1.6.0/go.mod h1:ZhwAQ4lH2Y3ONlzF/Mcai3lLm6VProap2toFoGKNC6k=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/net v0.0.0-20200202094626-16171245cfb2 h1:CCH4IOTTfewWjGOlSp+zGcjutRKlBEZQ6wTn8ozI/nI=
 golang.org/x/net v0.0.0-20200202094626-16171245cfb2/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=

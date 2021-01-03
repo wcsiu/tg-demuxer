@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/Arman92/go-tdlib"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/wcsiu/go-tdlib"
 	"github.com/wcsiu/tg-demuxer/internal/config"
 	"github.com/wcsiu/tg-demuxer/pkg/entity"
 )

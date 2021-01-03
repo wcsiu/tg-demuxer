@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Arman92/go-tdlib"
 	"github.com/pkg/errors"
-	"github.com/wcsiu/go-tdlib"
 	"github.com/wcsiu/tg-demuxer/internal/aws/s3"
 	"github.com/wcsiu/tg-demuxer/internal/config"
 	"github.com/wcsiu/tg-demuxer/internal/db/postgres"
@@ -147,7 +147,8 @@ func helloServer(w http.ResponseWriter, req *http.Request) {
 // see https://stackoverflow.com/questions/37782348/how-to-use-getchats-in-tdlib
 func updateChatList(client *tdlib.Client) error {
 	// need to call getChats to retrieve chats first into tdlib first.
-	if _, getChatsErr := client.GetChats(tdlib.JSONInt64(int64(math.MaxInt64)), 0, 1000); getChatsErr != nil {
+	var chatList = tdlib.NewChatListMain()
+	if _, getChatsErr := client.GetChats(chatList, tdlib.JSONInt64(int64(math.MaxInt64)), 0, 1000); getChatsErr != nil {
 		return getChatsErr
 	}
 	allChats = nil
@@ -204,7 +205,7 @@ func retrieveAllPreviousMediaFromChat(client *tdlib.Client, chatID int64) error 
 					break
 				}
 				var largest = getLargestResolution(p.Photo.Sizes)
-				var f, downloadErr = client.DownloadFile(largest.Photo.ID, 32)
+				var f, downloadErr = client.DownloadFile(largest.Photo.ID, 32, 0, 0, false)
 				if downloadErr != nil {
 					return downloadErr
 				}
@@ -212,7 +213,7 @@ func retrieveAllPreviousMediaFromChat(client *tdlib.Client, chatID int64) error 
 					Caption:                p.Caption.Text,
 					ChatID:                 chatID,
 					MessageID:              v.ID,
-					PhotoID:                int64(p.Photo.ID),
+					PhotoID:                int64(0),
 					MediaAlbumID:           int64(v.MediaAlbumID),
 					FileID:                 largest.Photo.ID,
 					SendUserID:             v.SenderUserID,
@@ -260,7 +261,7 @@ func retrieveAllPreviousMediaFromChat(client *tdlib.Client, chatID int64) error 
 					log.Println("ERROR: fail to type cast to MessageVideo")
 					break
 				}
-				var f, downloadErr = client.DownloadFile(vi.Video.Video.ID, 32)
+				var f, downloadErr = client.DownloadFile(vi.Video.Video.ID, 32, 0, 0, false)
 				if downloadErr != nil {
 					log.Printf("ERROR: fail to download video from telegram, video ID: %d", vi.Video.Video.ID)
 					return downloadErr
@@ -494,7 +495,7 @@ func TgChatUpdate(client *tdlib.Client, chatID, initialLastMessageID int64, inte
 							break
 						}
 						var largest = getLargestResolution(p.Photo.Sizes)
-						var f, downloadErr = client.DownloadFile(largest.Photo.ID, 32)
+						var f, downloadErr = client.DownloadFile(largest.Photo.ID, 32, 0, 0, false)
 						if downloadErr != nil {
 							log.Println("ERROR: fail to download photo, photo id: ", largest.Photo.ID, ", error: ", downloadErr)
 							next = true
@@ -504,7 +505,7 @@ func TgChatUpdate(client *tdlib.Client, chatID, initialLastMessageID int64, inte
 							Caption:                p.Caption.Text,
 							ChatID:                 chatID,
 							MessageID:              v.ID,
-							PhotoID:                int64(p.Photo.ID),
+							PhotoID:                int64(0),
 							MediaAlbumID:           int64(v.MediaAlbumID),
 							FileID:                 largest.Photo.ID,
 							SendUserID:             v.SenderUserID,
@@ -541,7 +542,7 @@ func TgChatUpdate(client *tdlib.Client, chatID, initialLastMessageID int64, inte
 							next = true
 							break
 						}
-						var f, downloadErr = client.DownloadFile(vi.Video.Video.ID, 32)
+						var f, downloadErr = client.DownloadFile(vi.Video.Video.ID, 32, 0, 0, false)
 						if downloadErr != nil {
 							log.Println("ERROR: fail to download video, video id: ", vi.Video.Video.ID, ", error: ", downloadErr)
 							next = true
